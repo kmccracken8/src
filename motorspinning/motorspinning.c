@@ -148,6 +148,7 @@ void vendor_requests(void) {
 
 int16_t main(void) {
     uint8_t *RPOR, *RPINR;
+    uint16_t data;
 
     init_elecanisms();
 
@@ -182,7 +183,7 @@ int16_t main(void) {
     OC1CON1 = 0x1C06;
     OC1CON2 = 0x001F;
     OC1RS = (uint16_t)(FCY / 1e3 - 1.);
-    OC1R = OC1RS;
+    OC1R = 0.25*OC1RS;
     OC1TMR = 0;
 
 
@@ -195,6 +196,9 @@ int16_t main(void) {
 #endif
     }
     while (1) {
+      data = enc_readReg(WORD(0x3FFF)).w & 0x3FFF;
+      OC1R = (data/(2^14))*OC1RS;
+
 #ifndef USB_INTERRUPT
         usb_service();
 #endif
