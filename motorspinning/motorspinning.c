@@ -58,9 +58,11 @@ uint16_t even_parity(uint16_t v) {
     return v & 1;
 }
 
-WORD enc_readReg(WORD address) {
-    WORD cmd, result;
+WORD enc_readReg() {
+    WORD cmd, result, address;
     uint16_t temp;
+
+    address = (WORD)0x3FFF;
 
     cmd.w = 0x4000 | address.w;         // set 2nd MSB to 1 for a read
     cmd.w |= even_parity(cmd.w) << 15;
@@ -135,7 +137,7 @@ void vendor_requests(void) {
             BD[EP0IN].status = UOWN | DTS | DTSEN;
             break;
         case ENC_READ_REG:
-            temp = enc_readReg(USB_setup.wValue);
+            temp = enc_readReg();
             BD[EP0IN].address[0] = temp.b[0];
             BD[EP0IN].address[1] = temp.b[1];
             BD[EP0IN].bytecount = 2;
@@ -148,7 +150,9 @@ void vendor_requests(void) {
 
 int16_t main(void) {
     uint8_t *RPOR, *RPINR;
-    uint16_t data;
+    uint16_t val;
+    double duty;
+    WORD data;
 
     init_elecanisms();
 
@@ -196,8 +200,13 @@ int16_t main(void) {
 #endif
     }
     while (1) {
-      data = enc_readReg(WORD(0x3FFF)).w & 0x3FFF;
-      OC1R = (data/(2^14))*OC1RS;
+      data = enc_readReg();
+      val = (data.b[0] + 256*data.b[1]) & 0x3FFF;
+      // OC1R = 0.8*OC1RS;
+      // OC1R = (double)(val/(16384))*OC1RS;
+      duty = val;
+      OC1R = (duty/16384)*OC1RS;
+
 
 #ifndef USB_INTERRUPT
         usb_service();
