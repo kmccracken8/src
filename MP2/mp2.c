@@ -68,7 +68,7 @@ WORD enc_readReg() {
 
 int16_t main(void) {
     uint8_t *RPOR, *RPINR;
-    uint16_t val, Enew, Eold, Edelta, count;
+    uint16_t val, Enew, Eold, Edelta, pos, vel, dir;
     double duty;
     WORD data;
 
@@ -107,15 +107,33 @@ int16_t main(void) {
 
     Eold = enc_readReg();
     Enew = enc_readReg();
-    Edelta = enc_readReg();
+    pos = enc_readReg();
+    Edelta = 0;
+    vel = 0;
+    dir = 0;
 
     while (1) {
       Enew = enc_readReg();
       Edelta = Enew - Eold;
-      if abs(Edelta) < 10000 {
-        count = count + Edelta;
+      if (abs(Edelta) < 10000) {
+        vel = (Edelta + vel)/2;
+        pos = pos + Edelta;
+        Eold = Enew;
+      }else if (Edelta > 0) {
+        Edelta = Enew - 16384 - Eold;
+        vel = (Edelta + vel)/2;
+        pos = pos + Edelta;
+        Eold = Enew;
+      }else{
+        Edelta = Enew - Eold + 16384;
+        vel = (Edelta + vel)/2;
+        pos = pos + Edelta;
+        Eold = Enew;
       }
-      else if 
+
+      if (Enew > 2000 && Enew < 9000){
+        pos = Enew - 5400;
+      }
 
 
       //val = (data.b[0] + 256*data.b[1]) & 0x3FFF;
