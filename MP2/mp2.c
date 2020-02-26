@@ -1,4 +1,5 @@
 #include "elecanisms.h"
+#include "usb.h"
 #include <stdio.h>
 
 #define ENC_MISO            D1
@@ -14,6 +15,13 @@
 #define ENC_MISO_RP         D1_RP
 #define ENC_MOSI_RP         D0_RP
 #define ENC_SCK_RP          D2_RP
+
+#define SPRING              0
+#define DAMPER              1
+#define TEXTURE             2
+#define WALL                3
+
+uint8_t mode;
 
 uint16_t even_parity(uint16_t v) {
     v ^= v >> 8;
@@ -66,11 +74,43 @@ WORD enc_readReg() {
     return result;
 }
 
+void vendor_requests(void){
+    WORD temp;
+    uint16_t i;
+
+    switch (USB_setup.bRequest) {
+        case SPRING:
+            mode = 0;
+            BD[EP0IN].bytecount = 0;
+            BD[EP0IN].status = UOWN | DTS | DTSEN;
+            break;
+        case DAMPER:
+            mode = 1;
+            BD[EP0IN].bytecount = 0;
+            BD[EP0IN].status = UOWN | DTS | DTSEN;
+            break;
+        case TEXTURE:
+            mode = 2;
+            BD[EP0IN].bytecount = 0;
+            BD[EP0IN].status = UOWN | DTS | DTSEN;
+            break;
+        case WALL:
+            mode = 3;
+            BD[EP0IN].bytecount = 0;
+            BD[EP0IN].status = UOWN | DTS | DTSEN;
+            break;
+        default:
+            USB_error_flags |= REQUEST_ERROR;
+    }
+}
+
 int16_t main(void) {
     uint8_t *RPOR, *RPINR;
-    uint16_t val, Enew, Eold, Edelta, pos, vel, dir;
+    int16_t Eval, Enew, Eold, Edelta, pos, vel, dir;
     double duty;
     WORD data;
+
+    mode = 0;
 
     init_elecanisms();
 
@@ -80,9 +120,11 @@ int16_t main(void) {
     ENC_MOSI_DIR = OUT; ENC_MOSI = 0;
     ENC_MISO_DIR = IN;
 
-    D5_DIR = OUT;
+    D5_DIR = OUT; //PWM output pin setup
     D5 = 0;
-    D7_DIR = OUT;
+    D6_DIR = OUT; //Direction output pin setup
+    D6 = 0;
+    D7_DIR = OUT; //Enable output pin setup
     D7 = 0;
 
     RPOR = (uint8_t *)&RPOR0;
@@ -105,41 +147,133 @@ int16_t main(void) {
     OC1R = 0.25*OC1RS;
     OC1TMR = 0;
 
-    Eold = enc_readReg();
-    Enew = enc_readReg();
-    pos = enc_readReg();
+    USB_setup_vendor_callback = vendor_requests;
+    init_usb();
+
+    //Reading encoder value
+    data = enc_readReg();
+    Eval = (data.b[0] + 256*data.b[1]) & 0x3FFF;
+    //Variable initialization
+    Eold = Eval;
+    Enew = Eval;
+    pos = Eval;
     Edelta = 0;
     vel = 0;
-    dir = 0;
 
+
+    while (USB_USWSTAT != CONFIG_STATE) {
+#ifndef USB_INTERRUPT
+        usb_service();
+#endif
+    }
     while (1) {
-      Enew = enc_readReg();
+      //Reading encoder value
+      data = enc_readReg();
+      Eval = (data.b[0] + 256*data.b[1]) & 0x3FFF;
+      //Defining current reading and change since last reading
+      Enew = Eval;
       Edelta = Enew - Eold;
+
       if (abs(Edelta) < 10000) {
+        //Position and velocity if the encoder hasn't wrapped around
         vel = (Edelta + vel)/2;
         pos = pos + Edelta;
         Eold = Enew;
       }else if (Edelta > 0) {
+        //Position and velocity if the encoder has wrapped around one way
         Edelta = Enew - 16384 - Eold;
         vel = (Edelta + vel)/2;
         pos = pos + Edelta;
         Eold = Enew;
       }else{
+        //Position and velocity if the envoder has wrapped around the other way
         Edelta = Enew - Eold + 16384;
         vel = (Edelta + vel)/2;
         pos = pos + Edelta;
         Eold = Enew;
       }
 
+      //Recalibrate position if encoder is within the unique value section
       if (Enew > 2000 && Enew < 9000){
         pos = Enew - 5400;
       }
 
+#ifndef USB_INTERRUPT
+        usb_service();
+#endif
 
-      //val = (data.b[0] + 256*data.b[1]) & 0x3FFF;
-      // OC1R = 0.8*OC1RS;
-      // OC1R = (double)(val/(16384))*OC1RS;
-      //duty = val;
-      //OC1R = (duty/16384)*OC1RS;
+      switch(mode){
+        case 0:
+            //Virtual Spring Mode
+            //Set direction against position
+            if (pos < 0){
+              D6 = 0;
+            }else{
+              D6 = 1;
+            }
+            //Motor output is proportional to distance from zero
+            duty = 1.3*abs(pos);
+            OC1R = ((duty/16384))*OC1RS;
+          break;
+        case 1:
+            //Virtual Damper Mode
+            //Set direction against velocity
+            if (vel < 0){
+              D6 = 0;
+            }else{
+              D6 = 1;
+            }
+            //Motor output is proportional to velocity
+            duty = abs(vel);
+            duty = duty/9;
+            if (duty > 1){
+              //Prevents duty cycle > 1
+              duty = 1;
+            }else if (duty < 0.15){
+              //Removes low duty cycle outputs
+              duty = 0;
+            }
+            OC1R = duty*OC1RS;
+          break;
+        case 2:
+            //Virtual Texture Mode
+            //Set direction against velocity
+            if (vel < 0){
+              D6 = 0;
+            }else{
+              D6 = 1;
+            }
+            //Duty is set high/low every 500 encoder units
+            //Dividing value controls texture density
+            //Higher == more dense
+            duty = abs(pos) % 1000;
+            if (duty < 500){
+              duty = 1;
+            }else{
+              duty = 0;
+            }
+            if (abs(vel) < 2){
+              //Only output if wheel is moving
+              duty = 0;
+            }
+            OC1R = duty*OC1RS;
+          break;
+        case 3:
+            //Virtual Wall Mode
+            //Set direction against position
+            if (pos < 0){
+              D6 = 0;
+            }else{
+              D6 = 1;
+            }
+            //Sets two wall positions on either side of zero
+            if (abs(pos) > 4000) {
+              duty = 1;
+            }else{
+              duty = 0;
+            }
+            OC1R = duty*OC1RS;
+          break;
+      }
     }
 }
