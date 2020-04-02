@@ -7,8 +7,7 @@
 int16_t main(void) {
     uint8_t mode, mode_sel, SW1_pressed, SW2_pressed, SW3_pressed, round_num;
     uint8_t setup, i, counter, lit;
-    uint16_t seed;
-    int game[255], bID;
+    uint16_t seed, game[255];
     init_elecanisms();
 
     T1CON = 0x0020;         // Sets Prescaling to 1:64
