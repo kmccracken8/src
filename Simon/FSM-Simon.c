@@ -6,17 +6,17 @@
 
 typedef void(*STATE_HANDLER_T)(void);
 
-void modeselect(void)
-void gameplay(void)
-void scoredisplay(void)
+void modeselect(void);
+void gameplay(void);
+void scoredisplay(void);
 
-STATE_HANDLER_T state, last state;
-
+STATE_HANDLER_T state, last_state;
+uint16_t mode, mode_sel, SW1_pressed, SW2_pressed, SW3_pressed, round_num;
+uint16_t i,j,k, counter, tcount, game_state, lit, unlit;
+uint16_t seed, game[255];
 
 int16_t main(void){
-    uint8_t mode, mode_sel, SW1_pressed, SW2_pressed, SW3_pressed, round_num;
-    uint8_t i, counter;
-    uint16_t seed, game[255];
+
     init_elecanisms();
 
     T1CON = 0x0020;         // Sets Prescaling to 1:64 and starts timer
@@ -26,14 +26,13 @@ int16_t main(void){
     IFS0bits.T1IF = 0;      // lower Timer1 interrupt flag
     T1CONbits.TON = 1;      // Starts timer
 
-    mode_sel = 0;
+    mode_sel = 2;
     SW1_pressed = 0;
     SW2_pressed = 0;
     SW3_pressed = 0;
-    round_num = 0;
-    counter = 1;
-    lit = 0;
-    seed = 0;
+
+    lit = 300;               //Defining LED on/off times in game
+    unlit = 600;
 
     state = modeselect;
     last_state = (STATE_HANDLER_T)NULL;
@@ -68,10 +67,10 @@ void modeselect(void){
       if(SW1 == 0 && SW1_pressed == 0){          //detect sw1
         SW1_pressed = 1;
         resetLED();
-        if (mode_sel < 3) {                      //advance mode selected
+        if (mode_sel < 2) {                      //advance mode selected
           mode_sel = mode_sel + 1;
         }else{
-          mode_sel = 1;
+          mode_sel = 0;
         }
         lightLED(mode_sel);
       }else if(SW1 == 1 && SW1_pressed == 1){
@@ -82,7 +81,6 @@ void modeselect(void){
         SW2_pressed = 1;
         mode = mode_sel;
         state = gameplay;
-        break;
       }else if(SW2 == 1 && SW2_pressed == 1){
         SW2_pressed = 0;
       }
@@ -91,19 +89,58 @@ void modeselect(void){
     if(state != last_state){
       resetLED();
       srand(seed);
-      SW1_pressed = 0;
-      SW2_pressed = 0;
-      SW3_pressed = 0;
     }
 }
 
 void gameplay(void){
     if(state != last_state){
         last_state = state;
-        
+
         for (i = 0; i < 255; i++) {
           game[i] = rand() % 3;
         }
+        game_state = 0;
+        tcount = 0;
+        round_num = 0;
+    }
+
+    switch (game_state) {
+        case 0:                                         //First wait
+          if(IFS0bits.T1IF == 1){
+            IFS0bits.T1IF = 0;
+            tcount = tcount + 50;
+          }
+          if(tcount >= 3000){
+            game_state = 1;
+            tcount = 0;
+            round_num = 200;
+          }
+          break;
+
+        case 1:                                         //Flash sequence
+          if(tcount = 0){
+            lightLED(game[j]);
+          }
+          if(tcount = lit){
+            resetLED();
+            j = j + 1;
+          }
+          if(IFS0bits.T1IF == 1){
+            IFS0bits.T1IF = 0;
+            tcount = tcount + 50;
+          }
+          if(tcount = lit + unlit){
+            tcount = 0;
+          }
+          if(j > round_num){
+              game_state = 2;
+              j = 0;
+          }
+          break;
+
+        case 2:                                         //Take input
+
+          break;
     }
 
 
