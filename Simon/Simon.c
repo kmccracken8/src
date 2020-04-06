@@ -3,6 +3,21 @@
 #include <stdio.h>
 #include <math.h>
 
+#define COIN                  SW1
+#define MODE_SW               SW1
+#define GO_SW                 SW2
+
+#define RED_LED               LED1
+//#define YELLOW_LED            D1
+#define BLUE_LED              LED3
+#define WHITE_LED             LED2
+
+#define RED_SW                SW3
+#define BLUE_SW               SW1
+//#define YELLOW_SW             D1
+#define WHITE_SW              SW2
+
+
 typedef void(*STATE_HANDLER_T)(void);
 
 void modeselect(void);
@@ -10,7 +25,7 @@ void gameplay(void);
 void scoredisplay(void);
 
 STATE_HANDLER_T state, last_state;
-uint16_t mode, mode_sel, SW1_pressed, SW2_pressed, SW3_pressed, round_num;
+uint16_t mode, mode_sel, GO_SW_pressed, COIN_on, MODE_SW_pressed, BLUE_SW_pressed, WHITE_SW_pressed, RED_SW_pressed, round_num;
 uint16_t i, j, k, counter, tcount, game_state, lit, unlit, lose, SWval;
 uint16_t seed, game[255], input[255];
 
@@ -21,22 +36,25 @@ int16_t main(void){
     init_elecanisms();
 
     T1CON = 0x0020;         // Sets Prescaling to 1:64 and starts timer
-    PR1 = 0x2EF3;           // Sets period register
-                                //65?ns*64*Pr=50ms???
+    PR1 = 0x30D4;           // Sets period register
+                                //62.5ns*64*12500=50ms
     TMR1 = 0;               // set Timer1 count to 0
     IFS0bits.T1IF = 0;      // lower Timer1 interrupt flag
     T1CONbits.TON = 1;      // Starts timer
 
-    SW1_pressed = 0;
-    SW2_pressed = 0;
-    SW3_pressed = 0;
+    BLUE_SW_pressed = 0;
+    WHITE_SW_pressed = 0;
+    RED_SW_pressed = 0;
+    MODE_SW_pressed = 0;
+    GO_SW_pressed = 0;
+    COIN_on = 0;
 
     mode_sel = 0;
     tcount = 0;
     lose = 0;
 
-    lit = 300;               //Defining LED on/off times in game
-    unlit = 600;
+    lit = 250;               //Defining LED on/off times in game
+    unlit = 500;
 
     state = modeselect;
     last_state = (STATE_HANDLER_T)NULL;
@@ -52,7 +70,7 @@ void modeselect(void){
         last_state = state;
         T2CON = 0x8000;         // Sets Prescaling to 1:1 and starts timer
         PR2 = 0x0001;           // Sets period register to 1
-                                    //250ns*1*1 = 250ns
+                                    //62.5ns*1*1 = 62.5ns
         TMR2 = 0;               // set Timer1 count to 0
         IFS0bits.T2IF = 0;      // lower Timer1 interrupt flag
     }
@@ -68,24 +86,24 @@ void modeselect(void){
     if(IFS0bits.T1IF == 1){                      //timer flag
       IFS0bits.T1IF = 0;
       lightLED(mode_sel);
-      if(SW1 == 0 && SW1_pressed == 0){          //detect sw1
-        SW1_pressed = 1;
+      if(MODE_SW == 0 && MODE_SW_pressed == 0){          //detect sw1
+        MODE_SW_pressed = 1;
         resetLED();
         if (mode_sel < 2) {                      //advance mode selected
           mode_sel = mode_sel + 1;
         }else{
           mode_sel = 0;
         }
-      }else if(SW1 == 1 && SW1_pressed == 1){
-        SW1_pressed = 0;
+      }else if(MODE_SW == 1 && MODE_SW_pressed == 1){
+        MODE_SW_pressed = 0;
       }
 
-      if(SW2 == 0 && SW2_pressed == 0){          //detect sw2
-        SW2_pressed = 1;
+      if(GO_SW  == 0 && GO_SW_pressed == 0){          //detect sw2
+        GO_SW_pressed = 1;
         mode = mode_sel;
         state = gameplay;
-      }else if(SW2 == 1 && SW2_pressed == 1){
-        SW2_pressed = 0;
+      }else if(GO_SW == 1 && GO_SW_pressed == 1){
+        GO_SW_pressed = 0;
       }
     }
 
@@ -109,7 +127,6 @@ void gameplay(void){
 
     switch (game_state) {
         case 0:                                         //First wait
-          lightLED(2);
           if(IFS0bits.T1IF == 1){
             IFS0bits.T1IF = 0;
             tcount = tcount + 50;
@@ -143,9 +160,9 @@ void gameplay(void){
               game_state = 2;
               j = 0;
               k = 0;
-              SW1_pressed = 0;
-              SW2_pressed = 0;
-              SW3_pressed = 0;
+              BLUE_SW_pressed = 0;
+              WHITE_SW_pressed = 0;
+              RED_SW_pressed = 0;
               tcount = 0;
           }
           break;
@@ -154,62 +171,63 @@ void gameplay(void){
           if(IFS0bits.T1IF == 1){
             IFS0bits.T1IF = 0;
 
-            if(SW1 == 0 && SW1_pressed == 0){
-              SW1_pressed = 1;
-              if(game[k] != 2){
+            if(BLUE_SW == 0 && BLUE_SW_pressed == 0){
+              BLUE_SW_pressed = 1;
+              if(game[k] != 2){                               //Lose Condition
                 lose = 1;
               }else{
                 k = k + 1;
                 tcount = 0;
               }
               lightLED(2);
-            }else if(SW1 == 1 && SW1_pressed == 1){
-              SW1_pressed = 0;
+            }else if(BLUE_SW == 1 && BLUE_SW_pressed == 1){
+              BLUE_SW_pressed = 0;
               resetLED();
             }
 
-            if(SW2 == 0 && SW2_pressed == 0){
-              SW2_pressed = 1;
-              if(game[k] != 1){
+            if(WHITE)SW == 0 && WHITE_SW_pressed == 0){
+              WHITE_SW_pressed = 1;
+              if(game[k] != 1){                               //Lose Condition
                 lose = 1;
               }else{
                 k = k + 1;
                 tcount = 0;
               }
               lightLED(1);
-            }else if(SW2 == 1 && SW2_pressed == 1){
-              SW2_pressed = 0;
+            }else if(WHITE_SW == 1 && WHITE_SW_pressed == 1){
+              WHITE_SW_pressed = 0;
               resetLED();
             }
 
-            if(SW3 == 0 && SW3_pressed == 0){
-              SW3_pressed = 1;
-              if(game[k] != 0){
+            if(RED_SW == 0 && RED_SW_pressed == 0){
+              RED_SW_pressed = 1;
+              if(game[k] != 0){                               //Lose Condition
                 lose = 1;
               }else{
                 k = k + 1;
                 tcount = 0;
               }
               lightLED(0);
-            }else if(SW3 == 1 && SW3_pressed == 1){
-              SW3_pressed = 0;
+            }else if(RED_SW == 1 && RED_SW_pressed == 1){
+              RED_SW_pressed = 0;
               resetLED();
             }
 
-            if(tcount >=3000){
+            if(tcount >=3000){                                //Lose Condition
               lose = 1;
             }
 
             tcount = tcount + 50;
           }
 
-          if(k > round_num){
+          if(k > round_num && tcount >= 1000){
             game_state = 1;
             j = 0;
             k = 0;
+            tcount = 0;
             round_num = round_num + 1;
           }
-          if(lose = 1){
+          if(lose == 1){
             state = scoredisplay;
           }
 
@@ -230,17 +248,15 @@ void scoredisplay(void){
         lightLED(2);
     }
 
-    //STATE TASKS
-
     if(state != last_state){
 
     }
 }
 
 int resetLED(){
-    LED1 = 0;
-    LED2 = 0;
-    LED3 = 0;
+    BLUE_LED = 0;
+    RED_LED = 0;
+    WHITE_LED = 0;
 }
 
 int lightLED(int id){
@@ -255,41 +271,4 @@ int lightLED(int id){
         LED3 = 1;
         break;
     }
-}
-
-int checkSW(){
-  int8_t output = 20;
-
-  if(SW1 == 0 && SW1_pressed == 0){
-    SW1_pressed = 1;
-  }else if(SW1 == 1 && SW1_pressed == 1){
-    SW1_pressed = 0;
-    resetLED();
-  }
-  if(SW2 == 0 && SW2_pressed == 0){
-    SW2_pressed = 1;
-  }else if(SW2 == 1 && SW2_pressed == 1){
-    SW2_pressed = 0;
-    resetLED();
-  }
-  if(SW3 == 0 && SW3_pressed == 0){
-    SW3_pressed = 1;
-  }else if(SW3 == 1 && SW3_pressed == 1){
-    SW3_pressed = 0;
-    resetLED();
-  }
-
-  if(SW1_pressed + SW2_pressed + SW3_pressed == 0){
-    output = 20;
-  }else if(SW1_pressed + SW2_pressed + SW3_pressed != 1){
-    output = 10;
-  }else if(SW1_pressed){
-    output = 2;
-  }else if(SW2_pressed){
-    output = 1;
-  }else if(SW3_pressed){
-    output = 0;
-  }
-
-  return output;
 }
