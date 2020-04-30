@@ -3,12 +3,11 @@
 #include <stdio.h>
 #include <math.h>
 
-#define MODE_SW               D8
-#define GO_SW                 D9
+#define GO_SW                 D8
 
 #define LED_1                 D4
 #define LED_2                 D5
-#define LED_3                 D10
+#define LED_3                 D6
 #define LED_4                 D7
 
 
@@ -17,15 +16,23 @@
 #define SW_3                  D2
 #define SW_4                  D3
 
+#define A                     D9
+#define B                     D10
+#define C                     D11
+#define D                     D12
+#define E                     D13
+#define F                     A1
+#define G                     A3
+
 
 typedef void(*STATE_HANDLER_T)(void);
 
-void modeselect(void);
+void pregame(void);
 void gameplay(void);
 void scoredisplay(void);
 
 STATE_HANDLER_T state, last_state;
-uint16_t mode, mode_sel, GO_SW_pressed, MODE_SW_pressed, SW_1_pressed, SW_2_pressed, SW_3_pressed, SW_4_pressed, round_num;
+uint16_t mode, mode_sel, GO_SW_pressed, SW_1_pressed, SW_2_pressed, SW_3_pressed, SW_4_pressed, round_num;
 uint16_t i, j, k, counter, tcount, game_state, lit, unlit, lose, SWval;
 uint16_t seed, game[255], input[255];
 
@@ -35,7 +42,7 @@ int16_t main(void){
 
     init_elecanisms();
 
-    T1CON = 0x0020;         // Sets Prescaling to 1:64 and starts timer
+    T1CON = 0x0020;         // Sets Prescaling to 1:64
     PR1 = 0x30D4;           // Sets period register
                                 //62.5ns*64*12500=50ms
     TMR1 = 0;               // set Timer1 count to 0
@@ -46,17 +53,15 @@ int16_t main(void){
     SW_2_pressed = 0;
     SW_3_pressed = 0;
     SW_4_pressed = 0;
-    MODE_SW_pressed = 0;
     GO_SW_pressed = 0;
 
-    mode_sel = 0;
     tcount = 0;
     lose = 0;
 
     lit = 250;               //Defining LED on/off times in game
     unlit = 500;
 
-    state = modeselect;
+    state = pregame;
     last_state = (STATE_HANDLER_T)NULL;
 
     D0_DIR = IN;
@@ -65,10 +70,21 @@ int16_t main(void){
     D3_DIR = IN;
     D4_DIR = OUT;
     D5_DIR = OUT;
-    D10_DIR = OUT;
+    D6_DIR = OUT;
     D7_DIR = OUT;
     D8_DIR = IN;
-    D9_DIR = IN;
+
+
+    ANSB = 0;
+    D9_DIR = OUT;
+    D10_DIR = OUT;
+    D11_DIR = OUT;
+    D12_DIR = OUT;
+    D13_DIR = OUT;
+    A1_DIR = OUT;
+    A3_DIR = OUT;
+
+    displaychar(35);
 
     resetLED();
 
@@ -78,7 +94,7 @@ int16_t main(void){
 
 }
 
-void modeselect(void){
+void pregame(void){
     if(state != last_state){
         last_state = state;
         T2CON = 0x8000;         // Sets Prescaling to 1:1 and starts timer
@@ -98,22 +114,8 @@ void modeselect(void){
 
     if(IFS0bits.T1IF == 1){                      //timer flag
       IFS0bits.T1IF = 0;
-      lightLED(mode_sel);
-      if(MODE_SW == 0 && MODE_SW_pressed == 0){          //detect sw1
-        MODE_SW_pressed = 1;
-        resetLED();
-        if (mode_sel < 3) {                      //advance mode selected
-          mode_sel = mode_sel + 1;
-        }else{
-          mode_sel = 0;
-        }
-      }else if(MODE_SW == 1 && MODE_SW_pressed == 1){
-        MODE_SW_pressed = 0;
-      }
-
-      if(GO_SW  == 0 && GO_SW_pressed == 0){          //detect sw2
+      if(GO_SW  == 0 && GO_SW_pressed == 0){          //detect Go Switch
         GO_SW_pressed = 1;
-        mode = mode_sel;
         state = gameplay;
       }else if(GO_SW == 1 && GO_SW_pressed == 1){
         GO_SW_pressed = 0;
@@ -143,9 +145,17 @@ void gameplay(void){
           if(IFS0bits.T1IF == 1){
             IFS0bits.T1IF = 0;
             tcount = tcount + 50;
+            if(tcount >= 0 && tcount < 1000){
+              displaychar(3);
+            }else if(tcount >= 1000 && tcount < 2000){
+              displaychar(2);
+            }else if(tcount >= 2000 && tcount < 3000){
+              displaychar(1);
+            }
           }
           if(tcount >= 3000){
             game_state = 1;
+            displaychar(35);
             tcount = 0;
             round_num = 0;
             j = 0;
@@ -275,18 +285,44 @@ void scoredisplay(void){
         lightLED(1);
         lightLED(2);
         lightLED(3);
+        tcount = 0;
+    }
+
+    if(IFS0bits.T1IF == 1){
+      IFS0bits.T1IF = 0;
+      tcount = tcount + 50;
+
+      if(tcount % 350 <= 125){ //Flash main lights
+        lightLED(0);
+        lightLED(1);
+        lightLED(2);
+        lightLED(3);
+      }else{
+        resetLED();
+      }
+
+      
+
+      if(tcount >= 3000){
+        state = pregame;
+      }
     }
 
     if(state != last_state){
-
+        tcount = 0;
     }
 }
 
 int resetLED(){
+    __asm__("nop");
     LED_1 = 0;
+    __asm__("nop");
     LED_2 = 0;
+    __asm__("nop");
     LED_3 = 0;
+    __asm__("nop");
     LED_4 = 0;
+    __asm__("nop");
 }
 
 int lightLED(int id){
@@ -303,5 +339,506 @@ int lightLED(int id){
       case 3:
         LED_4 = 1;
         break;
+    }
+}
+
+int displaychar(int digit){
+    switch (digit) {
+      case 0:
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
+      case 1:
+          A = 0;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
+      case 2:
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 3:
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 4:
+          A = 0;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 5:
+          A = 1;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 6:
+          A = 1;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 7:
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
+      case 8:
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 9:
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 10: //A
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 11:  //b
+          A = 0;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 12:  //C
+          A = 1;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
+      case 13:  //D
+          A = 0;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 14:  //E
+          A = 1;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 15:  //F
+          A = 1;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 16:  //G
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
+      case 17:  //H
+          A = 0;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 18:  //I
+          A = 0;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
+      case 19:  //J
+          A = 0;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
+      case 21:  //l
+          A = 0;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
+      case 23:  //n
+          A = 0;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 24:  //o
+          A = 0;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 25:  //P
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 26:  //q
+          A = 1;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 27:  //r
+          A = 0;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 28:  //S
+          A = 1;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 29:  //t
+          A = 0;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 30:  //U
+          A = 0;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 1;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
+      case 34:  //y
+          A = 0;
+          __asm__("nop");
+          B = 1;
+          __asm__("nop");
+          C = 1;
+          __asm__("nop");
+          D = 1;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 1;
+          __asm__("nop");
+          G = 1;
+          __asm__("nop");
+          break;
+      case 35:  //NULL
+          A = 0;
+          __asm__("nop");
+          B = 0;
+          __asm__("nop");
+          C = 0;
+          __asm__("nop");
+          D = 0;
+          __asm__("nop");
+          E = 0;
+          __asm__("nop");
+          F = 0;
+          __asm__("nop");
+          G = 0;
+          __asm__("nop");
+          break;
     }
 }
