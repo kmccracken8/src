@@ -33,7 +33,7 @@ void scoredisplay(void);
 
 STATE_HANDLER_T state, last_state;
 uint16_t mode, mode_sel, GO_SW_pressed, SW_1_pressed, SW_2_pressed, SW_3_pressed, SW_4_pressed, round_num;
-uint16_t i, j, k, counter, tcount, game_state, lit, unlit, lose, SWval;
+uint16_t i, j, k, counter, tcount, game_state, lit, unlit, lose, SWval, dig, tempo;
 uint16_t seed, game[255], input[255];
 
 
@@ -301,15 +301,61 @@ void scoredisplay(void){
         resetLED();
       }
 
-      
+      if(round_num >= 100){
+        dig = 3;
+      }else if (round_num >= 10){
+        dig = 2;
+      }else{
+        dig = 1;
+      }
 
-      if(tcount >= 3000){
+      tempo = 800;
+
+      if(tcount == 1*tempo){
+        displaychar(28);
+      }else if(tcount == 2*tempo){
+        displaychar(12);
+      }else if(tcount == 3*tempo){
+        displaychar(24);
+      }else if(tcount == 4*tempo){
+        displaychar(27);
+      }else if(tcount == 5*tempo){
+        displaychar(14);
+      }else if(tcount == 6*tempo){
+        if(dig == 3){
+          displaychar((round_num - (round_num % 100))/100);
+        }else if(dig == 2){
+          displaychar((round_num - (round_num % 10))/10);
+        }else if(dig == 1){
+          displaychar(round_num);
+        }
+      }else if(tcount == 7*tempo && dig > 1){
+        if(dig == 3){
+          displaychar(((round_num - (round_num - (round_num % 100)))-((round_num - (round_num - (round_num % 100))) % 10))/10);
+        }else if(dig == 2){
+          displaychar(round_num - (round_num - (round_num % 10)));
+        }
+      }else if(tcount == 8*tempo && dig == 3){
+        displaychar(round_num - ((round_num - (round_num - (round_num % 100)))-((round_num - (round_num - (round_num % 100))) % 10)) - (round_num - (round_num % 100)));
+      }
+
+      if(GO_SW  == 0 && GO_SW_pressed == 0){          //detect Go Switch
+        GO_SW_pressed = 1;
+        state = pregame;
+      }else if(GO_SW == 1 && GO_SW_pressed == 1){
+        GO_SW_pressed = 0;
+      }
+
+      if(tcount >= 20*tempo){
         state = pregame;
       }
     }
 
     if(state != last_state){
         tcount = 0;
+        displaychar(35);
+        lose = 0;
+        resetLED();
     }
 }
 
