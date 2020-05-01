@@ -3,12 +3,12 @@
 #include <stdio.h>
 #include <math.h>
 
-#define GO_SW                 D8
+#define GO_SW                 D9
 
 #define LED_1                 D4
 #define LED_2                 D5
-#define LED_3                 D6
-#define LED_4                 D7
+#define LED_3                 D7
+#define LED_4                 D8
 
 
 #define SW_1                  D0
@@ -16,13 +16,13 @@
 #define SW_3                  D2
 #define SW_4                  D3
 
-#define A                     D9
-#define B                     D10
-#define C                     D11
-#define D                     D12
-#define E                     D13
-#define F                     A1
-#define G                     A3
+#define A                     D10
+#define B                     D11
+#define C                     D12
+#define D                     D13
+#define E                     A1
+#define F                     A3
+#define G                     A5
 
 
 typedef void(*STATE_HANDLER_T)(void);
@@ -33,7 +33,7 @@ void scoredisplay(void);
 
 STATE_HANDLER_T state, last_state;
 uint16_t mode, mode_sel, GO_SW_pressed, SW_1_pressed, SW_2_pressed, SW_3_pressed, SW_4_pressed, round_num;
-uint16_t i, j, k, counter, tcount, game_state, lit, unlit, lose, SWval, dig, tempo;
+uint16_t i, j, k, counter, tcount, game_state, lit, unlit, lose, SWval, dig, dig1, dig2, dig3, tempo;
 uint16_t seed, game[255], input[255];
 
 
@@ -70,19 +70,19 @@ int16_t main(void){
     D3_DIR = IN;
     D4_DIR = OUT;
     D5_DIR = OUT;
-    D6_DIR = OUT;
     D7_DIR = OUT;
-    D8_DIR = IN;
+    D8_DIR = OUT;
+    D9_DIR = IN;
 
 
     ANSB = 0;
-    D9_DIR = OUT;
     D10_DIR = OUT;
     D11_DIR = OUT;
     D12_DIR = OUT;
     D13_DIR = OUT;
     A1_DIR = OUT;
     A3_DIR = OUT;
+    A5_DIR = OUT;
 
     displaychar(35);
 
@@ -311,6 +311,10 @@ void scoredisplay(void){
 
       tempo = 800;
 
+      dig3 = (round_num - (round_num % 100))/100;
+      dig2 = ((round_num - dig3*100) - ((round_num - dig3*100) % 10))/10;
+      dig1 = round_num - dig3*100 - dig2*10;
+
       if(tcount == 1*tempo){
         displaychar(28);
       }else if(tcount == 2*tempo){
@@ -322,21 +326,15 @@ void scoredisplay(void){
       }else if(tcount == 5*tempo){
         displaychar(14);
       }else if(tcount == 6*tempo){
-        if(dig == 3){
-          displaychar((round_num - (round_num % 100))/100);
-        }else if(dig == 2){
-          displaychar((round_num - (round_num % 10))/10);
-        }else if(dig == 1){
-          displaychar(round_num);
-        }
-      }else if(tcount == 7*tempo && dig > 1){
-        if(dig == 3){
-          displaychar(((round_num - (round_num - (round_num % 100)))-((round_num - (round_num - (round_num % 100))) % 10))/10);
-        }else if(dig == 2){
-          displaychar(round_num - (round_num - (round_num % 10)));
-        }
-      }else if(tcount == 8*tempo && dig == 3){
-        displaychar(round_num - ((round_num - (round_num - (round_num % 100)))-((round_num - (round_num - (round_num % 100))) % 10)) - (round_num - (round_num % 100)));
+        displaychar(dig3);
+      }else if(tcount == 7*tempo - 250){
+        displaychar(35);
+      }else if(tcount == 7*tempo){
+        displaychar(dig2);
+      }else if(tcount == 8*tempo - 250){
+        displaychar(35);
+      }else if(tcount == 8*tempo){
+        displaychar(dig1);
       }
 
       if(GO_SW  == 0 && GO_SW_pressed == 0){          //detect Go Switch
@@ -346,7 +344,7 @@ void scoredisplay(void){
         GO_SW_pressed = 0;
       }
 
-      if(tcount >= 20*tempo){
+      if(tcount >= 24*tempo){
         state = pregame;
       }
     }
